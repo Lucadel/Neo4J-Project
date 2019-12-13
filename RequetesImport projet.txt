@@ -1,0 +1,44 @@
+
+CREATE CONSTRAINT ON (l:Livre) ASSERT l.titre IS UNIQUE;  
+CREATE INDEX ON :Auteur(nomauteur);
+CREATE INDEX ON :Editeur(nomediteur);
+CREATE INDEX ON :Categorie(nomcat);
+USING PERIODIC COMMIT 500 
+
+LOAD CSV WITH HEADERS FROM 'file:///data_litterature.csv' 
+AS ligne with ligne where ligne.Titre is not null
+
+   MERGE (l:Livre {titre: trim(ligne.Titre)}) 
+
+   ON CREATE SET l.soustitre = trim(ligne.sstitre) 
+   ON CREATE SET l.date = ToInteger(ligne.Date) 
+   ON CREATE SET l.prets = ToInteger(ligne.prets) 
+   ON CREATE SET l.exemplaires = ToInteger(ligne.exemplaires)
+   ON CREATE SET l.localisations = ToInteger(ligne.localisations)
+   ON CREATE SET l.langue = trim(ligne.Langue)
+   
+   MERGE (auteur:Auteur { nomauteur: trim(ligne.Auteur) }) 
+   
+   MERGE (edi:Editeur { nomediteur: trim(ligne.Editeur) })
+   
+   MERGE (cat:Categorie { nomcat: trim(ligne.cat)}) 
+   
+   MERGE (l)-[: ECRIT]->(auteur)
+   MERGE (l)-[: EDITE]->(edi) 
+   MERGE (l)-[: APPARTIENT]->(cat) ;
+
+MATCH (e:Editeur)<-[: EDITE]-(l:Livre)-[: ECRIT]->(a:Auteur) WHERE l.prets>200  
+RETURN a,l,e
+
+MATCH (l:Livre)-[: ECRIT]->(a:Auteur)
+WITH a, count(l) as rel, collect(l) as livre
+WHERE rel > 1
+RETURN a,livre
+
+MATCH (e:Editeur)<-[: EDITE]-(l:Livre)-[: ECRIT]->(a:Auteur)
+WITH e, count(l) as rel, collect(l) as livre,collect(a) as auteur
+WHERE rel > 30
+RETURN e,livre,auteur LIMIT 10
+
+
+
