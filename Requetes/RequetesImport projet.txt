@@ -1,10 +1,12 @@
 
+#Contraintes
 CREATE CONSTRAINT ON (l:Livre) ASSERT l.titre IS UNIQUE;  
 CREATE INDEX ON :Auteur(nomauteur);
 CREATE INDEX ON :Editeur(nomediteur);
 CREATE INDEX ON :Categorie(nomcat);
 USING PERIODIC COMMIT 500 
 
+#Import 1
 LOAD CSV WITH HEADERS FROM 'file:///data_litterature.csv' 
 AS ligne with ligne where ligne.Titre is not null
 
@@ -12,6 +14,7 @@ AS ligne with ligne where ligne.Titre is not null
 
    ON CREATE SET l.soustitre = trim(ligne.sstitre) 
    ON CREATE SET l.date = ToInteger(ligne.Date) 
+   ON CREATE SET l.tauxemprunt = ToInteger(ligne.tauxemprunt)
    ON CREATE SET l.prets = ToInteger(ligne.prets) 
    ON CREATE SET l.exemplaires = ToInteger(ligne.exemplaires)
    ON CREATE SET l.localisations = ToInteger(ligne.localisations)
@@ -27,18 +30,26 @@ AS ligne with ligne where ligne.Titre is not null
    MERGE (l)-[: EDITE]->(edi) 
    MERGE (l)-[: APPARTIENT]->(cat) ;
 
-MATCH (e:Editeur)<-[: EDITE]-(l:Livre)-[: ECRIT]->(a:Auteur) WHERE l.prets>200  
-RETURN a,l,e
+#Import 2
+LOAD CSV WITH HEADERS FROM 'file:///Googlebook_db.csv' 
+AS ligne with ligne where ligne.Titre is not null
+    MERGE (l:Livre {titre: trim(ligne.Titre)}) SET l.summary = trim(ligne.Summary)
 
-MATCH (l:Livre)-[: ECRIT]->(a:Auteur)
-WITH a, count(l) as rel, collect(l) as livre
+#Requetes
+
+MATCH (e:Editeur)--(l:Livre)--(a:Auteur)
+WITH a, count(distinct(l.titre)) as rel, collect(l) as l, collect(e) as e
 WHERE rel > 1
-RETURN a,livre
+RETURN a, l,e
+ORDER BY rel DESC
+LIMIT 1
 
-MATCH (e:Editeur)<-[: EDITE]-(l:Livre)-[: ECRIT]->(a:Auteur)
-WITH e, count(l) as rel, collect(l) as livre,collect(a) as auteur
-WHERE rel > 30
-RETURN e,livre,auteur LIMIT 10
+MATCH (e:Editeur{nomediteur:"Gallimard"})--(l:Livre)--(a:Auteur)
+WHERE l.date IS NOT NULL
+RETURN l,a,e
+ORDER BY l.date DESC
+LIMIT 10
+
 
 
 
