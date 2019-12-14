@@ -42,7 +42,7 @@ WITH a, count(distinct(l.titre)) as rel, collect(l) as l, collect(e) as e
 WHERE rel > 1
 RETURN a, l,e
 ORDER BY rel DESC
-LIMIT 1
+LIMIT 100
 
 MATCH (e:Editeur{nomediteur:"Gallimard"})--(l:Livre)--(a:Auteur)
 WHERE l.date IS NOT NULL
