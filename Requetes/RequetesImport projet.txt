@@ -1,24 +1,42 @@
+#CONTRAINTES
+CREATE CONSTRAINT ON (l:Livre) ASSERT (l.titre, l.auteur) IS NODE KEY;
+CREATE CONSTRAINT ON (a:Auteur) ASSERT a.nomauteur IS UNIQUE;,
+CREATE CONSTRAINT ON (e:Editeur) ASSERT e.nomediteur IS UNIQUE;
+CREATE CONSTRAINT ON (c: Categorie) ASSERT c.nomcat IS UNIQUE;
 
-#Contraintes
-CREATE CONSTRAINT ON (l:Livre) ASSERT l.titre IS UNIQUE;  
-CREATE INDEX ON :Auteur(nomauteur);
-CREATE INDEX ON :Editeur(nomediteur);
-CREATE INDEX ON :Categorie(nomcat);
+
+#IMPORT1
 USING PERIODIC COMMIT 500 
 
-#Import 1
 LOAD CSV WITH HEADERS FROM 'file:///data_litterature.csv' 
 AS ligne with ligne where ligne.Titre is not null
 
-   MERGE (l:Livre {titre: trim(ligne.Titre)}) 
-
-   ON CREATE SET l.soustitre = trim(ligne.sstitre) 
-   ON CREATE SET l.date = ToInteger(ligne.Date) 
-   ON CREATE SET l.tauxemprunt = ToInteger(ligne.tauxemprunt)
+   MERGE (l:Livre {titre: trim(ligne.Titre), auteur: trim(ligne.Auteur)}) 
+   
    ON CREATE SET l.prets = ToInteger(ligne.prets) 
-   ON CREATE SET l.exemplaires = ToInteger(ligne.exemplaires)
-   ON CREATE SET l.localisations = ToInteger(ligne.localisations)
+   ON MATCH SET l.prets = l.prets + ToInteger(ligne.prets) 
+      
+   ON CREATE SET l.exemplaires = ToInteger(ligne.exemplaires) 
+   ON MATCH SET l.exemplaires = l.exemplaires + ToInteger(ligne.exemplaires)
+    
+   ON CREATE SET l.localisations = ToInteger(ligne.localisations) 
+   ON MATCH SET l.localisations = l.localisations + ToInteger(ligne.localisations)
+
+   ON CREATE SET l.soustitre = trim(ligne.sstitre)  
    ON CREATE SET l.langue = trim(ligne.Langue)
+   
+   SET l.editions =COALESCE(l.editions,[]) + 
+   CASE WHEN NOT (trim(ligne.Editeur) +"_"+ trim(ligne.Date)) IN COALESCE(l.editions,[]) 
+   THEN (trim(ligne.Editeur) +"_"+ trim(ligne.Date)) 
+   END
+   
+   SET l.date=COALESCE(l.date,[]) + 
+   CASE WHEN NOT ToInteger(ligne.Date) IN COALESCE(l.date,[]) 
+   THEN ToInteger(ligne.Date) 
+   END
+ 
+   SET l.tauxemprunt =round(100-(24-l.prets/l.exemplaires)*100*0.0416666666)
+   
    
    MERGE (auteur:Auteur { nomauteur: trim(ligne.Auteur) }) 
    
@@ -30,26 +48,54 @@ AS ligne with ligne where ligne.Titre is not null
    MERGE (l)-[: EDITE]->(edi) 
    MERGE (l)-[: APPARTIENT]->(cat) ;
 
-#Import 2
+
+IMPORT 2
 LOAD CSV WITH HEADERS FROM 'file:///Googlebook_db.csv' 
 AS ligne with ligne where ligne.Titre is not null
-    MERGE (l:Livre {titre: trim(ligne.Titre)}) SET l.summary = trim(ligne.Summary)
 
-#Requetes
-
-MATCH (e:Editeur)--(l:Livre)--(a:Auteur)
-WITH a, count(distinct(l.titre)) as rel, collect(l) as l, collect(e) as e
-WHERE rel > 1
-RETURN a, l,e
-ORDER BY rel DESC
-LIMIT 100
-
-MATCH (e:Editeur{nomediteur:"Gallimard"})--(l:Livre)--(a:Auteur)
-WHERE l.date IS NOT NULL
-RETURN l,a,e
-ORDER BY l.date DESC
+   MERGE (l:Livre {titre: trim(ligne.Titre), auteur: trim(ligne.Auteur)})  SET l.summary = trim(ligne.Summary)
+   
+REQUETE 1
+MATCH (c:Categorie)--(l:Livre)--(a:Auteur) 
+WITH a,c, collect(l.titre) as l ,collect(l.prets) as p, reduce(total=0, number in collect (l.prets) | total + number) as psum
+RETURN a.nomauteur , l, p, psum, right(c.nomcat,length(c.nomcat)-4)
+ORDER BY psum DESC
 LIMIT 10
 
+REQUETE2
+MATCH (cat)--(l:Livre)--(a:Auteur)
+MATCH (l:Livre)--(e:Editeur)
+WHERE left(cat.nomcat,4)="LNAM"
+WITH collect(e.nomediteur) as e, a, l
+RETURN DISTINCT(l.titre),a.nomauteur,e, l.langue, l.prets
+ORDER BY l.prets DESC
+LIMIT 20
+
+REQUETE3
+MATCH (cat)--(l:Livre)--(a:Auteur)
+MATCH (l:Livre)--(e:Editeur)
+WITH a,l,collect(distinct(e.nomediteur)) as e
+RETURN l.titre, a.nomauteur, e, l.langue, l.tauxemprunt
+ORDER BY l.tauxemprunt DESC
+LIMIT 20
+
+REQUETE4
+MATCH (c:Categorie)--(l:Livre)--(a:Auteur)
+WITH a, count(distinct(l.titre)) as rel, collect(l.titre) as l, collect(l.prets) as p, c
+RETURN a.nomauteur, l,p,rel,right(c.nomcat,length(c.nomcat)-4)
+ORDER BY rel DESC
+LIMIT 20
+
+REQUETE5
+MATCH (e:Editeur{nomediteur:"Gallimard"})--(l:Livre)--(a:Auteur)
+WHERE l.date IS NOT NULL
+RETURN l.titre,a.nomauteur,reduce(m=0, t IN l.date | CASE WHEN m > t THEN m ELSE t END) as lastedition, l.tauxemprunt
+ORDER BY lastedition DESC
+LIMIT 20
+
+
+
+MATCH (n) DETACH DELETE(n)
 
 
 
