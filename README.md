@@ -157,6 +157,7 @@ driver = GraphDatabase.driver(DB_URI, auth=(DB_USER, DB_PASSWORD))
 CONTRAINTES=[
 #On identifie un ouvrage par son titre et son auteur
 "CREATE CONSTRAINT ON (l:Livre) ASSERT (l.titre, l.auteur) IS NODE KEY;",
+#On affecte une unique valeur au nom de l'auteur
 "CREATE CONSTRAINT ON (a:Auteur) ASSERT a.nomauteur IS UNIQUE;",
 "CREATE CONSTRAINT ON (e:Editeur) ASSERT e.nomediteur IS UNIQUE;",
 "CREATE CONSTRAINT ON (c: Categorie) ASSERT c.nomcat IS UNIQUE;"]
