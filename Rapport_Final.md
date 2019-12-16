@@ -1,4 +1,4 @@
-## Rendu Neo4J
+## Rapport Neo4J
 
 Luca Delanglade - Nicolas Lamy
 
@@ -157,7 +157,8 @@ driver = GraphDatabase.driver(DB_URI, auth=(DB_USER, DB_PASSWORD))
 CONTRAINTES=[
 #On identifie un ouvrage par son titre et son auteur
 "CREATE CONSTRAINT ON (l:Livre) ASSERT (l.titre, l.auteur) IS NODE KEY;",
-#On affecte une unique valeur au nom de l'auteur
+
+#On affecte des valeurs unique pour le nom de l'auteur,de l'éditeur et le nom de la catégorie.
 "CREATE CONSTRAINT ON (a:Auteur) ASSERT a.nomauteur IS UNIQUE;",
 "CREATE CONSTRAINT ON (e:Editeur) ASSERT e.nomediteur IS UNIQUE;",
 "CREATE CONSTRAINT ON (c: Categorie) ASSERT c.nomcat IS UNIQUE;"]
@@ -170,15 +171,17 @@ for i in CONTRAINTES:
 ```python
 #Import des données principales. 
 
-#On les metrics pour chaque ouvrage en aggrégeant les données provenant des différentes éditions de ces ouvrages
+#On rassemble les différentes informations des ouvrages
 IMPORT1="""
 USING PERIODIC COMMIT 500 
 
 LOAD CSV WITH HEADERS FROM 'file:///data_litterature.csv' 
 AS ligne with ligne where ligne.Titre is not null
 
+   #Création d'un noeud Livre
    MERGE (l:Livre {titre: trim(ligne.Titre), auteur: trim(ligne.Auteur)}) 
    
+   #Ajout (ou met à jour) une propriété 'prets' à livre
    ON CREATE SET l.prets = ToInteger(ligne.prets) 
    ON MATCH SET l.prets = l.prets + ToInteger(ligne.prets) 
       
@@ -191,24 +194,31 @@ AS ligne with ligne where ligne.Titre is not null
    ON CREATE SET l.soustitre = trim(ligne.sstitre)  
    ON CREATE SET l.langue = trim(ligne.Langue)
    
+   #Concaténation des maisons d'éditions
    SET l.editions =COALESCE(l.editions,[]) + 
    CASE WHEN NOT (trim(ligne.Editeur) +"_"+ trim(ligne.Date)) IN COALESCE(l.editions,[]) 
    THEN (trim(ligne.Editeur) +"_"+ trim(ligne.Date)) 
    END
    
+   #Concaténation des dates
    SET l.date=COALESCE(l.date,[]) + 
    CASE WHEN NOT ToInteger(ligne.Date) IN COALESCE(l.date,[]) 
    THEN ToInteger(ligne.Date) 
    END
- 
+   
+   #Création d'une propriété taux d'emprunt
    SET l.tauxemprunt =round(100-(24-l.prets/l.exemplaires)*100*0.0416666666)
    
+   #Création du noeud auteur
    MERGE (auteur:Auteur { nomauteur: trim(ligne.Auteur) }) 
    
+   #Création du noeud editeur
    MERGE (edi:Editeur { nomediteur: trim(ligne.Editeur) })
    
+   #Création du noeud catégorie
    MERGE (cat:Categorie { nomcat: trim(ligne.cat)}) 
    
+   #Création de relation
    MERGE (l)-[: ECRIT]->(auteur)
    MERGE (l)-[: EDITE]->(edi) 
    MERGE (l)-[: APPARTIENT]->(cat) ;
@@ -226,7 +236,8 @@ IMPORT2="""
 
 LOAD CSV WITH HEADERS FROM 'file:///Googlebook_db.csv' 
 AS ligne with ligne where ligne.Titre is not null
-
+   
+   #Ajout d'une propriété summary de GoogleBook
    MERGE (l:Livre {titre: trim(ligne.Titre)}) SET l.summary = trim(ligne.Summary)
    
 """
@@ -241,6 +252,7 @@ with driver.session() as session:
 #Qui sont les auteurs les plus lus?
 
 REQUETE1="""
+
 
 MATCH (c:Categorie)--(l:Livre)--(a:Auteur) 
 WITH a,c, collect(l.titre) as l ,collect(l.prets) as p, reduce(total=0, number in collect (l.prets) | total + number) as psum
@@ -378,10 +390,11 @@ df.head(20)
 </table>
 </div>
 
-
-
-
 ```python
+Le top trois des auteurs les plus lus sont Anne Perry, Harlan Coben et Michael Connely.
+
+
+
 #Quels sont les livres américains les plus lus?
 REQUETE2="""
 
@@ -514,10 +527,14 @@ df.head(10)
 </div>
 
 
-
-
 ```python
-#Quels sont les Livres les plus difficiles à emprunter? (Taux emprunt: 100%=2emprunts par mois par exemplaire)
+#Les livres américains les plus lus sont Intimidation et Divergente.
+#On remarque qu'Intimidation, le livre le plus lu à été écrit par le deuxième auteur le plus lu (Harlan Coben).
+#On retrouve le trone de fer dans le top 10.
+
+#Quels sont les Livres les plus difficiles à emprunter? 
+# Le Taux emprunt est de 100% pour 2 emprunts par mois par exemplaire. 
+# On estime qu'un livre est emprunté pour 15 jours, il faut deux emprunts pour que le livre soit emprunté un mois.
 REQUETE3="""
 
 MATCH (cat)--(l:Livre)--(a:Auteur)
@@ -649,9 +666,10 @@ df.head(10)
 </div>
 
 
-
-
 ```python
+Le top trois des livres les plus difficiles à emprunter sont le café chat, l'école du crime et sphinx.
+
+
 #Quels auteurs sont les mieux représentés en bibliothèque?
 
 REQUETE4="""
@@ -916,9 +934,9 @@ df.head(20)
 </div>
 
 
-
-
 ```python
+Le top trois des auteurs les mieux représentés en bibliothèque sont Georges Simenon, Agatha Christie et Honoré de Balzac.
+
 #Nous souhaitons voir quels sont les derniers livres édités par Gallimard qui sont disponibles à l'emprunt
 REQUETE5="""
 
@@ -1039,4 +1057,5 @@ df.head(10)
 </table>
 </div>
 
-
+```python
+Les deux derniers livres édités par Gallimard qui sont disponibles à l'emprunt sont "Le coeur conten"t et "Casse-gueule"
