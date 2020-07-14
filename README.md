@@ -4,6 +4,6 @@ I choose to study a book loan database in order to explore people's interest in 
 This project includes:
 - Data preprocessing in Python
 - Data visualization in Python
-- Web scrapping via Googlebook API in Python
+- Web scrapping via Googlebook's API in Python
 - A synthesis with the Neo4J queries made on the graph database to extract valuable information
 
