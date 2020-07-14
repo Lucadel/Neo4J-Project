@@ -1,6 +1,6 @@
 # Graph-to-analyze-book-loan-trending-Neo4J
 A UTT project related to Neo4J graph database. 
-I choose to study a book loan database in order to explore 
+I choose to study a book loan database in order to explore people's interest in reading.
 This project includes:
 - Data preprocessing in Python
 - Data visualization in Python
